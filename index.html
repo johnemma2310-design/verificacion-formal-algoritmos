@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador · Verificación formal de algoritmos</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --card:#ffffff; --ink:#1f2328; --muted:#5f6670; --line:#dcd8cf;
+    --accent:#1d4e89; --accent2:#c0392b; --ok:#1e8449; --bad:#c0392b; --warn:#b9770e;
+    --lo:#2e86c1; --hi:#8e44ad; --mid:#e67e22; --found:#27ae60;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  header{background:var(--accent);color:#fff;padding:18px 28px}
+  header h1{margin:0;font-size:1.45rem;font-weight:600}
+  header p{margin:4px 0 0;opacity:.85;font-size:.92rem}
+  nav{display:flex;gap:4px;padding:0 24px;background:#163e6e;flex-wrap:wrap}
+  nav button{background:none;border:0;color:#cfe0f5;padding:12px 16px;font-size:.95rem;cursor:pointer;border-bottom:3px solid transparent}
+  nav button.active{color:#fff;border-bottom-color:#f5b041;font-weight:600}
+  main{max-width:1250px;margin:0 auto;padding:20px}
+  .tab{display:none}.tab.active{display:block}
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
+  @media (max-width:950px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  .card h2{margin:0 0 10px;font-size:1.05rem;color:var(--accent)}
+  .card h3{margin:14px 0 6px;font-size:.95rem}
+  .context{background:#fffaf0;border-left:4px solid #f5b041}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:10px}
+  .controls label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted);gap:3px}
+  input[type=text],input[type=number]{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:.9rem}
+  input.wide{width:340px;max-width:100%}
+  button.b{padding:7px 13px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:.88rem}
+  button.b.sec{background:#fff;color:var(--accent)}
+  button.b.danger{background:#fff;color:var(--bad);border-color:var(--bad)}
+  button.b:disabled{opacity:.45;cursor:default}
+  .chk{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--bad);flex-direction:row!important}
+  .speed{width:110px}
+  /* arreglo */
+  .arr{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0 26px}
+  .cell{position:relative;width:46px;height:46px;border:2px solid #b7c4d4;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.95rem;background:#eef4fb;transition:all .25s}
+  .cell .idx{position:absolute;top:-1px;left:3px;font-size:.6rem;color:var(--muted)}
+  .cell.out{background:#eceae5;color:#aaa;border-color:#ddd}
+  .cell.mid{border-color:var(--mid);background:#fdebd0;transform:translateY(-4px)}
+  .cell.found{border-color:var(--found);background:#d5f5e3;font-weight:700}
+  .cell .tag{position:absolute;bottom:-21px;font-size:.68rem;font-weight:700;font-family:var(--mono)}
+  .tag.lo{color:var(--lo)} .tag.hi{color:var(--hi)} .tag.mid{color:var(--mid)}
+  /* pseudocódigo */
+  pre.code{font-family:var(--mono);font-size:.84rem;background:#fbfaf7;border:1px solid var(--line);border-radius:8px;padding:8px 0;margin:0;white-space:pre}
+  pre.code span{display:block;padding:1px 12px}
+  pre.code span.cur{background:#fdebd0;border-left:4px solid var(--mid);padding-left:8px}
+  pre.code .as{color:var(--ok)}
+  /* checks */
+  .checks{list-style:none;padding:0;margin:0}
+  .checks li{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+  .checks li:last-child{border:0}
+  .badge{flex:0 0 auto;min-width:26px;text-align:center;border-radius:5px;font-weight:700;font-size:.85rem;padding:1px 6px}
+  .badge.ok{background:#d5f5e3;color:var(--ok)} .badge.bad{background:#fadbd8;color:var(--bad)} .badge.na{background:#eee;color:#888}
+  .f{font-family:var(--mono);font-size:.86rem}
+  .msg{padding:10px 12px;border-radius:8px;font-size:.92rem;margin-top:10px}
+  .msg.ok{background:#e9f7ef;border:1px solid #a9dfbf}
+  .msg.bad{background:#fdedec;border:1px solid #f5b7b1}
+  .msg.info{background:#eaf2fb;border:1px solid #aed6f1}
+  table{border-collapse:collapse;width:100%;font-size:.84rem}
+  th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:center}
+  td.f{white-space:nowrap}
+  th{background:#f1efe9;font-weight:600}
+  td.okc{color:var(--ok);font-weight:700} td.badc{color:var(--bad);font-weight:700}
+  .scroll{max-height:290px;overflow:auto}
+  .stat{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0}
+  .stat div{font-size:.85rem;color:var(--muted)} .stat b{display:block;font-size:1.25rem;color:var(--ink);font-family:var(--mono)}
+  canvas{max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .theory p,.theory li{font-size:.94rem}
+  .theory .box{background:#fbfaf7;border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:8px 0}
+  .muted{color:var(--muted);font-size:.85rem}
+  kbd{border:1px solid #bbb;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:.8rem;background:#fff}
+</style>
+</head>
+<body>
+<header>
+  <h1>Simulador de verificación formal de algoritmos</h1>
+  <p>Tema 1 · Matemáticas Discretas · Universidad Católica Luis Amigó · Precondición, invariante, función variante y postcondición, ejecutadas paso a paso</p>
+</header>
+<nav>
+  <button class="active" data-tab="bs">Búsqueda binaria</button>
+  <button data-tab="eu">Algoritmo de Euclides</button>
+  <button data-tab="val">Validación masiva</button>
+  <button data-tab="teo">Demostración</button>
+</nav>
+
+<main>
+<!-- ===================== BÚSQUEDA BINARIA ===================== -->
+<section id="bs" class="tab active">
+  <div class="card context">
+    <b>Problema real:</b> la oficina de admisiones tiene la lista de códigos de estudiantes <i>ordenada</i>. ¿Está matriculado el código <i>x</i>?
+    Revisarla uno por uno toma hasta <i>n</i> comparaciones; la búsqueda binaria toma como máximo ⌊log₂ n⌋ + 1. ¿Cómo sabemos que <b>nunca</b> se equivoca?
+  </div>
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Entrada</h2>
+        <div class="controls">
+          <label>Arreglo A (separado por comas)<input id="bsArr" class="wide" type="text"></label>
+          <label>Buscar x<input id="bsX" type="number" style="width:90px"></label>
+        </div>
+        <div class="controls">
+          <label>n<input id="bsN" type="number" value="16" min="1" max="60" style="width:70px"></label>
+          <button class="b sec" id="bsGen">Generar lista aleatoria</button>
+          <button class="b sec" id="bsPick">x presente</button>
+          <button class="b sec" id="bsMiss">x ausente</button>
+          <label class="chk"><input type="checkbox" id="bsBug"> Versión con error (lo ← mid)</label>
+        </div>
+        <div class="controls">
+          <button class="b" id="bsStep">Paso ▶</button>
+          <button class="b" id="bsPlay">Reproducir ⏵</button>
+          <button class="b sec" id="bsReset">Reiniciar ⟲</button>
+          <label>Velocidad<input id="bsSpeed" class="speed" type="range" min="150" max="1500" value="700"></label>
+        </div>
+        <div id="bsArrView" class="arr"></div>
+        <div id="bsMsg"></div>
+      </div>
+      <div class="card">
+        <h2>Traza de la ejecución</h2>
+        <div class="scroll"><table id="bsLog"><thead><tr><th>Iter.</th><th>lo</th><th>hi</th><th>mid</th><th>A[mid]</th><th>Decisión</th><th>V = hi−lo+1</th><th>Invariante</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Especificación y pseudocódigo</h2>
+        <pre class="code" id="bsCode"></pre>
+      </div>
+      <div class="card">
+        <h2>Verificación en vivo</h2>
+        <ul class="checks" id="bsChecks"></ul>
+        <h3>Función variante V (debe decrecer estrictamente)</h3>
+        <svg id="bsSpark" width="100%" height="70"></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== EUCLIDES ===================== -->
+<section id="eu" class="tab">
+  <div class="card context">
+    <b>Problema real:</b> un salón mide <i>a</i> × <i>b</i> cm y se quiere cubrir con baldosas cuadradas iguales, <i>sin cortar ninguna</i> y lo más grandes posible.
+    El lado de la baldosa es <b>mcd(a, b)</b>. El dibujo muestra cómo Euclides “recorta cuadrados” del rectángulo hasta que el último cuadrado encaja exactamente.
+  </div>
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Entrada</h2>
+        <div class="controls">
+          <label>a (largo, cm)<input id="euA" type="number" value="1071" min="0" style="width:110px"></label>
+          <label>b (ancho, cm)<input id="euB" type="number" value="462" min="0" style="width:110px"></label>
+          <button class="b sec" id="euRand">Aleatorio</button>
+          <button class="b sec" id="euFib">Peor caso (Fibonacci)</button>
+          <label class="chk"><input type="checkbox" id="euBug"> Versión con error (r ← ⌊a / b⌋)</label>
+        </div>
+        <div class="controls">
+          <button class="b" id="euStep">Paso ▶</button>
+          <button class="b" id="euPlay">Reproducir ⏵</button>
+          <button class="b sec" id="euReset">Reiniciar ⟲</button>
+          <label>Velocidad<input id="euSpeed" class="speed" type="range" min="150" max="1500" value="800"></label>
+        </div>
+        <canvas id="euCanvas" width="640" height="340"></canvas>
+        <div id="euMsg"></div>
+      </div>
+      <div class="card">
+        <h2>Traza de la ejecución</h2>
+        <div class="scroll"><table id="euLog"><thead><tr><th>Iter.</th><th>a</th><th>b</th><th>q = ⌊a/b⌋</th><th>r</th><th>a = q·b + r</th><th>mcd(a, b)</th><th>Invariante</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Especificación y pseudocódigo</h2>
+        <pre class="code" id="euCode"></pre>
+      </div>
+      <div class="card">
+        <h2>Verificación en vivo</h2>
+        <ul class="checks" id="euChecks"></ul>
+        <h3>Función variante V = b (debe decrecer estrictamente)</h3>
+        <svg id="euSpark" width="100%" height="70"></svg>
+        <p class="muted" id="euLame"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== VALIDACIÓN MASIVA ===================== -->
+<section id="val" class="tab">
+  <div class="card">
+    <h2>Validación computacional</h2>
+    <p>Se ejecutan miles de casos aleatorios. En <b>cada iteración</b> se comprueba el invariante y que la variante decrezca; al final, la postcondición se compara contra un <i>oráculo</i> por fuerza bruta
+      (recorrido lineal para la búsqueda; probar todos los divisores para el mcd). También se verifica la cota de iteraciones.</p>
+    <div class="controls">
+      <label>Número de pruebas<input id="valN" type="number" value="10000" min="100" max="200000" style="width:110px"></label>
+      <label>Semilla<input id="valSeed" type="number" value="2026" style="width:90px"></label>
+      <label class="chk"><input type="checkbox" id="valBug"> Probar las versiones con error</label>
+      <button class="b" id="valRun">Ejecutar pruebas</button>
+    </div>
+    <div id="valOut"></div>
+  </div>
+</section>
+
+<!-- ===================== DEMOSTRACIÓN ===================== -->
+<section id="teo" class="tab theory">
+  <div class="card">
+    <h2>Método: correctitud = correctitud parcial + terminación</h2>
+    <p>Para un ciclo <span class="f">mientras G hacer S</span> con invariante <i>I</i> y función variante <i>V</i> (entera), se demuestra por <b>inducción sobre el número de iteraciones k</b>:</p>
+    <ol>
+      <li><b>Inicialización (caso base, k = 0):</b> la precondición y las asignaciones iniciales implican <i>I</i>.</li>
+      <li><b>Mantenimiento (paso inductivo):</b> si <i>I</i> ∧ <i>G</i> se cumplen antes de una iteración, <i>I</i> se cumple después.</li>
+      <li><b>Salida:</b> <i>I</i> ∧ ¬<i>G</i> ⇒ postcondición.</li>
+      <li><b>Terminación:</b> <i>V</i> ≥ 0 mientras <i>G</i>, y cada iteración la hace decrecer estrictamente. Como no existe una sucesión infinita estrictamente decreciente en ℕ (principio del buen orden), el ciclo termina.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Búsqueda binaria</h2>
+    <div class="box f">
+      Pre: A[0..n−1] ordenado: A[0] ≤ A[1] ≤ … ≤ A[n−1]<br>
+      Post: (r ≠ −1 ∧ A[r] = x) ∨ (r = −1 ∧ x ∉ A)<br>
+      I: 0 ≤ lo ≤ hi+1 ≤ n ∧ (∀k &lt; lo: A[k] &lt; x) ∧ (∀k &gt; hi: A[k] &gt; x)<br>
+      V = hi − lo + 1
+    </div>
+    <p><b>Inicialización.</b> lo = 0, hi = n−1: 0 ≤ 0 ≤ n ≤ n, y los conjuntos {k &lt; 0} y {k &gt; n−1} son vacíos, así que los cuantificadores son verdaderos por vacuidad.</p>
+    <p><b>Mantenimiento.</b> Supongamos <i>I</i> y lo ≤ hi; sea mid = ⌊(lo+hi)/2⌋, con lo ≤ mid ≤ hi.</p>
+    <ul>
+      <li>Si A[mid] = x se retorna mid y la postcondición se cumple de inmediato.</li>
+      <li>Si A[mid] &lt; x: por el orden, A[k] ≤ A[mid] &lt; x para todo k ≤ mid; tras lo ← mid+1 se cumple ∀k &lt; lo: A[k] &lt; x. Lo demás no cambia.</li>
+      <li>Si A[mid] &gt; x: simétrico, A[k] ≥ A[mid] &gt; x para k ≥ mid, y hi ← mid−1.</li>
+    </ul>
+    <p><b>Salida.</b> Si el ciclo termina sin retornar, lo = hi+1, de modo que todo índice k cumple k &lt; lo o k &gt; hi, y por <i>I</i> A[k] ≠ x. Entonces x ∉ A y retornar −1 es correcto.</p>
+    <p><b>Terminación.</b> En las dos ramas, V pasa a (mid − lo) o (hi − mid), ambas &lt; hi − lo + 1. Además V ≥ 0 por <i>I</i>. Como V se reduce al menos a la mitad, hay como máximo ⌊log₂ n⌋ + 1 iteraciones.</p>
+    <p class="msg bad"><b>¿Por qué falla la versión con error?</b> Con <span class="f">lo ← mid</span> el invariante se sigue cumpliendo, pero si hi = lo + 1 entonces mid = lo y V no cambia: <b>la correctitud parcial no basta, hace falta la variante</b>. El simulador lo detecta.</p>
+  </div>
+
+  <div class="card">
+    <h2>Algoritmo de Euclides</h2>
+    <div class="box f">
+      Pre: a₀, b₀ ∈ ℤ, a₀ ≥ 0, b₀ ≥ 0, no ambos 0<br>
+      Post: el valor retornado es mcd(a₀, b₀)<br>
+      I: a ≥ 0 ∧ b ≥ 0 ∧ mcd(a, b) = mcd(a₀, b₀)<br>
+      V = b
+    </div>
+    <p><b>Lema.</b> Si a = q·b + r, entonces mcd(a, b) = mcd(b, r).<br>
+      <i>Prueba:</i> si d | a y d | b, entonces d | a − q·b = r. Recíprocamente, si d | b y d | r, entonces d | q·b + r = a. Los pares (a, b) y (b, r) tienen <b>exactamente los mismos divisores comunes</b>, así que su máximo coincide. ∎</p>
+    <p><b>Inicialización.</b> a = a₀, b = b₀: I se cumple trivialmente.</p>
+    <p><b>Mantenimiento.</b> Si b ≠ 0, r = a mod b cumple 0 ≤ r &lt; b. Por el lema, mcd(b, r) = mcd(a, b) = mcd(a₀, b₀).</p>
+    <p><b>Salida.</b> Si b = 0, mcd(a, 0) = a, luego a = mcd(a₀, b₀).</p>
+    <p><b>Terminación.</b> V = b ≥ 0 y el nuevo b es r &lt; b. Por el <b>teorema de Lamé</b>, el número de divisiones es como máximo 5 veces el número de dígitos de min(a₀, b₀); el peor caso son números de Fibonacci consecutivos.</p>
+    <p class="msg bad"><b>¿Por qué falla la versión con error?</b> Con <span class="f">r ← ⌊a/b⌋</span> el ciclo termina, pero el lema ya no aplica: el invariante se rompe (ej. 48, 18 → 18, 2 y mcd cambia de 6 a 2). <b>Terminar no basta, hace falta el invariante.</b></p>
+  </div>
+  <p class="muted">Referencias sugeridas (APA): Rosen, K. H. (2019). <i>Discrete mathematics and its applications</i> (8.ª ed.). McGraw-Hill. · Cormen, T. H., Leiserson, C. E., Rivest, R. L. y Stein, C. (2022). <i>Introduction to algorithms</i> (4.ª ed.). MIT Press. · Gries, D. (1981). <i>The science of programming</i>. Springer. · Knuth, D. E. (1997). <i>The art of computer programming, Vol. 2</i> (3.ª ed.). Addison-Wesley.</p>
+</section>
+<p class="muted" style="text-align:center">Atajo: <kbd>→</kbd> o <kbd>Espacio</kbd> avanza un paso en la pestaña actual.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- pestañas ---------- */
+let currentTab = 'bs';
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === b.dataset.tab));
+  currentTab = b.dataset.tab;
+});
+
+/* ---------- utilidades ---------- */
+function badge(v){ return v === null ? '<span class="badge na">—</span>' : v ? '<span class="badge ok">✔</span>' : '<span class="badge bad">✘</span>'; }
+function renderCode(el, lines, cur){
+  el.innerHTML = lines.map((l, i) => `<span class="${i + 1 === cur ? 'cur' : ''}">${String(i + 1).padStart(2)}  ${l}</span>`).join('');
+  // cur = número de línea mostrado (1 = precondición)
+}
+function spark(svg, vals, color){
+  const W = svg.clientWidth || 360, H = 70, p = 8;
+  if (vals.length === 0){ svg.innerHTML = ''; return; }
+  const mx = Math.max(...vals, 1), n = Math.max(vals.length - 1, 1);
+  const pts = vals.map((v, i) => [p + i * (W - 2 * p) / n, H - p - v / mx * (H - 2 * p)]);
+  svg.innerHTML = `<line x1="${p}" y1="${H - p}" x2="${W - p}" y2="${H - p}" stroke="#ccc"/>
+    <polyline fill="none" stroke="${color}" stroke-width="2" points="${pts.map(q => q.join(',')).join(' ')}"/>` +
+    pts.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="${color}"/><text x="${q[0]}" y="${q[1] - 6}" font-size="10" text-anchor="middle" fill="#555">${vals[i]}</text>`).join('');
+}
+// generador pseudoaleatorio con semilla (mulberry32) para que la validación sea reproducible
+function rng(seed){ let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const randInt = (r, lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
+
+/* =====================================================================
+   BÚSQUEDA BINARIA
+   ===================================================================== */
+const BS_CODE = [
+  '<b class="as">{ Pre: A[0..n−1] ordenado ascendente }</b>',
+  'lo ← 0 ;  hi ← n − 1',
+  'mientras lo ≤ hi hacer   <b class="as">{ Inv }</b>',
+  '    mid ← ⌊(lo + hi) / 2⌋',
+  '    si A[mid] = x entonces retornar mid',
+  '    si A[mid] &lt; x entonces lo ← mid + 1',
+  '    si no hi ← mid − 1',
+  'retornar −1',
+  '<b class="as">{ Post: (r ≠ −1 ∧ A[r] = x) ∨ (r = −1 ∧ x ∉ A) }</b>'
+];
+const BS_CODE_BUG = BS_CODE.map((l, i) => i === 5 ? '    si A[mid] &lt; x entonces <b style="color:#c0392b">lo ← mid</b>   ← error' : l);
+
+function bsInv(A, x, lo, hi){
+  const n = A.length;
+  const i1 = 0 <= lo && lo <= hi + 1 && hi + 1 <= n;
+  let i2 = true, i3 = true;
+  for (let k = 0; k < Math.min(lo, n); k++) if (!(A[k] < x)) { i2 = false; break; }
+  for (let k = Math.max(hi + 1, 0); k < n; k++) if (!(A[k] > x)) { i3 = false; break; }
+  return { i1, i2, i3, all: i1 && i2 && i3 };
+}
+const isSorted = A => A.every((v, i) => i === 0 || A[i - 1] <= v);
+
+let BS = null, bsPlaying = false;
+
+function bsGenerate(){
+  const n = Math.max(1, Math.min(60, +$('bsN').value || 16));
+  const set = new Set();
+  while (set.size < n) set.add(100 + Math.floor(Math.random() * 900));
+  const A = [...set].sort((a, b) => a - b);
+  $('bsArr').value = A.join(', ');
+  $('bsX').value = A[Math.floor(Math.random() * n)];
+  bsReset();
+}
+function bsReset(){
+  bsPlaying = false; $('bsPlay').textContent = 'Reproducir ⏵';
+  const A = $('bsArr').value.split(/[,;\s]+/).filter(s => s !== '').map(Number).filter(v => !isNaN(v));
+  const x = Number($('bsX').value);
+  BS = { A, x, n: A.length, lo: 0, hi: A.length - 1, mid: null, phase: 'ready', line: 2, done: false,
+         result: null, it: 0, V: [A.length], log: [], bug: $('bsBug').checked, err: null, pre: isSorted(A), invOk: true };
+  BS.inv = bsInv(A, x, BS.lo, BS.hi);
+  bsRender();
+}
+function bsStep(){
+  const S = BS; if (!S || S.done) return;
+  if (S.phase === 'ready'){
+    if (S.lo > S.hi){ S.done = true; S.result = -1; S.line = 8; S.mid = null; }
+    else {
+      S.mid = Math.floor((S.lo + S.hi) / 2); S.line = 4; S.phase = 'mid'; S.it++;
+      if (S.it > 200){ S.done = true; S.err = 'Se superaron 200 iteraciones.'; }
+    }
+  } else { // comparar y actualizar
+    const { A, x, mid } = S, v = A[mid], Vold = S.hi - S.lo + 1;
+    let dec;
+    if (v === x){ S.done = true; S.result = mid; S.line = 5; dec = 'A[mid] = x → encontrado'; }
+    else if (v < x){ S.lo = S.bug ? mid : mid + 1; S.line = 6; dec = `A[mid] < x → lo ← ${S.bug ? 'mid' : 'mid+1'}`; }
+    else { S.hi = mid - 1; S.line = 7; dec = 'A[mid] > x → hi ← mid−1'; }
+    const Vnew = S.hi - S.lo + 1;
+    S.inv = bsInv(A, x, S.lo, S.hi);
+    if (!S.inv.all) S.invOk = false;
+    if (!S.done){
+      S.V.push(Vnew);
+      if (!(Vnew < Vold)){
+        S.done = true;
+        S.err = `La variante NO decreció (V = ${Vold} → ${Vnew}). Con lo = ${S.lo}, hi = ${S.hi} el cálculo de mid vuelve a dar ${Math.floor((S.lo + S.hi) / 2)}: el ciclo se repetiría para siempre. El programa NO termina.`;
+      }
+    }
+    S.log.push({ it: S.it, mid, v, dec, V: S.result === mid ? Vold : Vnew, inv: S.inv.all, before: S.before });
+    S.phase = 'ready';
+  }
+  if (S.phase === 'mid') S.before = { lo: S.lo, hi: S.hi };
+  bsRender();
+}
+function bsRender(){
+  const S = BS;
+  renderCode($('bsCode'), S.bug ? BS_CODE_BUG : BS_CODE, S.line);
+  // arreglo
+  $('bsArrView').innerHTML = S.A.map((v, k) => {
+    const out = (k < S.lo || k > S.hi) && !(S.done && S.result === k);
+    let cls = 'cell' + (out ? ' out' : '') + (k === S.mid && !S.done ? ' mid' : '') + (S.done && S.result === k ? ' found' : '');
+    const tags = [];
+    if (k === S.lo) tags.push('<span class="lo">lo</span>');
+    if (k === S.mid && !S.done) tags.push('<span class="mid">mid</span>');
+    if (k === S.hi) tags.push('<span class="hi">hi</span>');
+    return `<div class="${cls}"><span class="idx">${k}</span>${v}${tags.length ? `<span class="tag">${tags.join(' ')}</span>` : ''}</div>`;
+  }).join('') || '<i class="muted">Arreglo vacío</i>';
+  // checks
+  const post = S.done && !S.err ? (S.result === -1 ? !S.A.includes(S.x) : S.A[S.result] === S.x) : null;
+  const Vcur = S.hi - S.lo + 1;
+  const vdec = S.V.length < 2 ? null : S.V[S.V.length - 1] < S.V[S.V.length - 2];
+  $('bsChecks').innerHTML = [
+    [S.pre, `<b>Precondición:</b> A está ordenado ascendentemente${S.pre ? '' : ' — <b>no se cumple</b>: el algoritmo no tiene garantía'}`],
+    [S.inv.i1, `<span class="f">0 ≤ lo ≤ hi+1 ≤ n</span> &nbsp;→&nbsp; <span class="f">0 ≤ ${S.lo} ≤ ${S.hi + 1} ≤ ${S.n}</span>`],
+    [S.inv.i2, `<span class="f">∀k &lt; lo: A[k] &lt; x</span> &nbsp;(lo descartados a la izquierda son menores que ${S.x})`],
+    [S.inv.i3, `<span class="f">∀k &gt; hi: A[k] &gt; x</span> &nbsp;(descartados a la derecha son mayores que ${S.x})`],
+    [Vcur >= 0, `<b>Variante acotada:</b> <span class="f">V = hi − lo + 1 = ${Vcur} ≥ 0</span>`],
+    [vdec, `<b>Variante decrece</b> en la última iteración${S.V.length >= 2 ? ` (${S.V[S.V.length - 2]} → ${S.V[S.V.length - 1]})` : ''}`],
+    [post, `<b>Postcondición</b>${S.done && !S.err ? ` con r = ${S.result}` : ' (al terminar)'}`],
+    [S.it <= Math.floor(Math.log2(Math.max(S.n, 1))) + 1 ? true : false, `<b>Cota:</b> iteraciones = ${S.it} ≤ ⌊log₂ ${S.n}⌋ + 1 = ${Math.floor(Math.log2(Math.max(S.n, 1))) + 1}`]
+  ].map(([v, t]) => `<li>${badge(v)}<div>${t}</div></li>`).join('');
+  // mensaje
+  let m = '';
+  if (S.err) m = `<div class="msg bad">✘ ${S.err}</div>`;
+  else if (S.done) m = S.result >= 0
+    ? `<div class="msg ok">✔ Encontrado: A[${S.result}] = ${S.x} en ${S.it} iteración(es). La postcondición se cumple.</div>`
+    : `<div class="msg ok">✔ lo = ${S.lo} > hi = ${S.hi}: no quedan candidatos. Por el invariante, todo A[k] ≠ ${S.x}, así que retornar −1 es correcto (${S.it} iteraciones).</div>`;
+  else if (S.phase === 'mid') m = `<div class="msg info">Iteración ${S.it}: mid = ⌊(${S.lo} + ${S.hi}) / 2⌋ = ${S.mid}; se compara A[${S.mid}] = ${S.A[S.mid]} con x = ${S.x}.</div>`;
+  else m = `<div class="msg info">Intervalo candidato [${S.lo}, ${S.hi}] con ${Math.max(Vcur, 0)} elemento(s). Pulsa <b>Paso</b>.</div>`;
+  if (!S.pre) m += `<div class="msg bad">⚠ El arreglo no está ordenado: la precondición falla y el invariante puede romperse (obsérvalo en la lista de verificación).</div>`;
+  $('bsMsg').innerHTML = m;
+  // traza
+  $('bsLog').tBodies[0].innerHTML = S.log.map(r => `<tr><td>${r.it}</td><td>${r.before ? r.before.lo : ''}</td><td>${r.before ? r.before.hi : ''}</td><td>${r.mid}</td><td>${r.v}</td><td style="text-align:left">${r.dec}</td><td>${r.V}</td><td class="${r.inv ? 'okc' : 'badc'}">${r.inv ? '✔' : '✘'}</td></tr>`).join('');
+  spark($('bsSpark'), S.V, '#2e86c1');
+  $('bsStep').disabled = S.done;
+}
+async function bsPlay(){
+  if (bsPlaying){ bsPlaying = false; $('bsPlay').textContent = 'Reproducir ⏵'; return; }
+  bsPlaying = true; $('bsPlay').textContent = 'Pausar ⏸';
+  while (bsPlaying && !BS.done){ bsStep(); await sleep(1650 - $('bsSpeed').value); }
+  bsPlaying = false; $('bsPlay').textContent = 'Reproducir ⏵';
+}
+$('bsGen').onclick = bsGenerate; $('bsReset').onclick = bsReset; $('bsStep').onclick = bsStep; $('bsPlay').onclick = bsPlay;
+$('bsBug').onchange = bsReset; $('bsArr').onchange = bsReset; $('bsX').onchange = bsReset;
+$('bsPick').onclick = () => { const A = BS.A; if (A.length) { $('bsX').value = A[Math.floor(Math.random() * A.length)]; bsReset(); } };
+$('bsMiss').onclick = () => { const A = BS.A; let x; do { x = (A[0] ?? 0) - 5 + Math.floor(Math.random() * ((A[A.length - 1] ?? 10) - (A[0] ?? 0) + 10)); } while (A.includes(x)); $('bsX').value = x; bsReset(); };
+
+/* =====================================================================
+   EUCLIDES
+   ===================================================================== */
+const EU_CODE = [
+  '<b class="as">{ Pre: a ≥ 0, b ≥ 0, no ambos 0 }</b>',
+  'mientras b ≠ 0 hacer   <b class="as">{ Inv: mcd(a,b) = mcd(a₀,b₀) }</b>',
+  '    r ← a mod b',
+  '    a ← b ;  b ← r',
+  'retornar a',
+  '<b class="as">{ Post: a = mcd(a₀, b₀) }</b>'
+];
+const EU_CODE_BUG = EU_CODE.map((l, i) => i === 2 ? '    <b style="color:#c0392b">r ← ⌊a / b⌋</b>   ← error' : l);
+// oráculo independiente: prueba todos los divisores (no usa Euclides)
+function gcdBrute(a, b){
+  if (a === 0) return b; if (b === 0) return a;
+  for (let d = Math.min(a, b); d >= 1; d--) if (a % d === 0 && b % d === 0) return d;
+}
+const COLORS = ['#5dade2', '#f5b041', '#58d68d', '#af7ac5', '#ec7063', '#48c9b0', '#f4d03f', '#7fb3d5', '#e59866', '#a3e4d7'];
+
+let EU = null, euPlaying = false;
+function euReset(){
+  euPlaying = false; $('euPlay').textContent = 'Reproducir ⏵';
+  let a = Math.max(0, Math.floor(+$('euA').value || 0)), b = Math.max(0, Math.floor(+$('euB').value || 0));
+  if (a > 1e6 || b > 1e6){ a = Math.min(a, 1e6); b = Math.min(b, 1e6); $('euA').value = a; $('euB').value = b; }
+  const pre = !(a === 0 && b === 0);
+  EU = { a0: a, b0: b, a, b, g0: pre ? gcdBrute(a, b) : null, pre, it: 0, log: [], done: !pre, line: 2, bug: $('euBug').checked,
+         V: [b], rect: { x: 0, y: 0, w: a, h: b }, squares: [], inv: true, invOk: true, err: pre ? null : 'Precondición falsa: mcd(0, 0) no está definido.' };
+  euRender();
+}
+function euStep(){
+  const S = EU; if (!S || S.done) return;
+  if (S.b === 0){ S.done = true; S.line = 5; euRender(); return; }
+  const { a, b } = S;
+  const q = Math.floor(a / b), r = S.bug ? q : a % b;
+  // geometría: recortar q cuadrados de lado b (solo versión correcta, cuando a ≥ b)
+  if (!S.bug && a >= b){
+    const R = S.rect, s = b;
+    for (let k = 0; k < q; k++){
+      if (R.w >= R.h){ S.squares.push({ x: R.x + k * s, y: R.y, s, step: S.it }); }
+      else { S.squares.push({ x: R.x, y: R.y + k * s, s, step: S.it }); }
+    }
+    if (R.w >= R.h){ R.x += q * s; R.w -= q * s; } else { R.y += q * s; R.h -= q * s; }
+  }
+  S.a = b; S.b = r; S.it++; S.line = 4;
+  const g = gcdBrute(S.a, S.b);
+  S.inv = S.a >= 0 && S.b >= 0 && g === S.g0;
+  if (!S.inv) S.invOk = false;
+  S.V.push(r);
+  S.log.push({ it: S.it, a, b, q, r, g, inv: S.inv });
+  if (!(r < b)){ S.done = true; S.err = `La variante no decreció (b: ${b} → ${r}).`; }
+  if (S.it > 300){ S.done = true; S.err = 'Se superaron 300 iteraciones.'; }
+  euRender();
+}
+function euDraw(){
+  const S = EU, cv = $('euCanvas'), ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!S.pre || S.a0 === 0 || S.b0 === 0){ ctx.fillStyle = '#888'; ctx.font = '14px Segoe UI'; ctx.fillText('Sin rectángulo que dibujar (algún lado es 0).', 20, 30); return; }
+  const pad = 20, sc = Math.min((cv.width - 2 * pad) / S.a0, (cv.height - 2 * pad - 14) / S.b0);
+  const ox = (cv.width - S.a0 * sc) / 2, oy = pad;
+  ctx.fillStyle = '#f4f1ea'; ctx.fillRect(ox, oy, S.a0 * sc, S.b0 * sc);
+  S.squares.forEach(q => {
+    ctx.fillStyle = COLORS[q.step % COLORS.length] + 'cc';
+    ctx.fillRect(ox + q.x * sc, oy + q.y * sc, q.s * sc, q.s * sc);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(ox + q.x * sc, oy + q.y * sc, q.s * sc, q.s * sc);
+    if (q.s * sc > 26){ ctx.fillStyle = '#1f2328'; ctx.font = `${Math.min(14, q.s * sc / 4)}px Consolas`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(q.s, ox + (q.x + q.s / 2) * sc, oy + (q.y + q.s / 2) * sc); }
+  });
+  if (S.done && !S.bug && !S.err && S.g0 * sc >= 3){ // retícula de baldosas finales
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 0.6;
+    for (let x = S.g0; x < S.a0; x += S.g0){ ctx.beginPath(); ctx.moveTo(ox + x * sc, oy); ctx.lineTo(ox + x * sc, oy + S.b0 * sc); ctx.stroke(); }
+    for (let y = S.g0; y < S.b0; y += S.g0){ ctx.beginPath(); ctx.moveTo(ox, oy + y * sc); ctx.lineTo(ox + S.a0 * sc, oy + y * sc); ctx.stroke(); }
+  }
+  ctx.strokeStyle = '#1d4e89'; ctx.lineWidth = 2; ctx.strokeRect(ox, oy, S.a0 * sc, S.b0 * sc);
+  if (!S.done && !S.bug && S.rect.w > 0 && S.rect.h > 0){
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = '#c0392b'; ctx.strokeRect(ox + S.rect.x * sc, oy + S.rect.y * sc, S.rect.w * sc, S.rect.h * sc); ctx.setLineDash([]);
+  }
+  ctx.fillStyle = '#5f6670'; ctx.font = '12px Segoe UI'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(`Salón ${S.a0} × ${S.b0} cm · rectángulo rojo = lo que falta por recortar (lados = a, b actuales)`, ox, cv.height - 6);
+}
+function euRender(){
+  const S = EU;
+  renderCode($('euCode'), S.bug ? EU_CODE_BUG : EU_CODE, S.line);
+  euDraw();
+  const post = S.done && !S.err ? S.a === S.g0 : null;
+  const vdec = S.V.length < 2 ? null : S.V[S.V.length - 1] < S.V[S.V.length - 2];
+  const gNow = S.pre ? gcdBrute(S.a, S.b) : null;
+  $('euChecks').innerHTML = [
+    [S.pre, `<b>Precondición:</b> a₀ = ${S.a0} ≥ 0, b₀ = ${S.b0} ≥ 0, no ambos 0`],
+    [S.a >= 0 && S.b >= 0, `<span class="f">a ≥ 0 ∧ b ≥ 0</span> &nbsp;→&nbsp; <span class="f">a = ${S.a}, b = ${S.b}</span>`],
+    [S.pre ? gNow === S.g0 : null, `<b>Invariante:</b> <span class="f">mcd(${S.a}, ${S.b}) = ${gNow ?? '?'}</span> ${gNow === S.g0 ? '=' : '≠'} <span class="f">mcd(a₀, b₀) = ${S.g0 ?? '?'}</span>`],
+    [S.b >= 0, `<b>Variante acotada:</b> <span class="f">V = b = ${S.b} ≥ 0</span>`],
+    [vdec, `<b>Variante decrece</b>${S.V.length >= 2 ? ` (${S.V[S.V.length - 2]} → ${S.V[S.V.length - 1]})` : ''} &nbsp;porque 0 ≤ r &lt; b`],
+    [post, `<b>Postcondición:</b> ${S.done && !S.err ? `a = ${S.a} ${S.a === S.g0 ? '=' : '≠'} mcd(a₀, b₀) = ${S.g0}` : 'al terminar, a = mcd(a₀, b₀)'}`]
+  ].map(([v, t]) => `<li>${badge(v)}<div>${t}</div></li>`).join('');
+  const mn = Math.min(S.a0, S.b0), digits = mn > 0 ? String(mn).length : 1;
+  $('euLame').textContent = `Teorema de Lamé: divisiones ≤ 5 × (dígitos de min(a₀, b₀)) = 5 × ${digits} = ${5 * digits}. Llevamos ${S.it}.`;
+  let m = '';
+  const firstBad = S.log.find(r => !r.inv);
+  if (S.err) m = `<div class="msg bad">✘ ${S.err}${firstBad ? ` Además, el invariante ya se había roto en la iteración ${firstBad.it}: mcd cambió de ${S.g0} a ${firstBad.g}.` : ''}</div>`;
+  else if (S.done && S.bug) m = `<div class="msg bad">✘ El programa terminó y retornó ${S.a}, pero mcd(${S.a0}, ${S.b0}) = ${S.g0}. ${S.invOk ? '' : 'El invariante se rompió en la traza (filas con ✘): ese es el punto exacto donde la demostración falla.'}</div>`;
+  else if (S.done) m = `<div class="msg ok">✔ b = 0, así que mcd(${S.a0}, ${S.b0}) = ${S.a} en ${S.it} divisiones. Baldosa de ${S.a} × ${S.a} cm; se necesitan ${(S.a0 / S.a) * (S.b0 / S.a)} baldosas (${S.a0 / S.a} × ${S.b0 / S.a}).</div>`;
+  else if (S.it === 0) m = `<div class="msg info">Estado inicial: a = ${S.a}, b = ${S.b}. Pulsa <b>Paso</b>.</div>`;
+  else { const L = S.log[S.log.length - 1]; m = `<div class="msg info">${L.a} = ${L.q} · ${L.b} + ${L.r} → ${S.bug ? '' : `se recortan ${L.q} cuadrado(s) de lado ${L.b}; `}nuevo par (${S.a}, ${S.b}).</div>`; }
+  $('euMsg').innerHTML = m;
+  $('euLog').tBodies[0].innerHTML = S.log.map(r => `<tr><td>${r.it}</td><td>${r.a}</td><td>${r.b}</td><td>${r.q}</td><td>${r.r}</td><td class="f">${r.a} = ${r.q}·${r.b} + ${r.a - r.q * r.b}</td><td>${r.g}</td><td class="${r.inv ? 'okc' : 'badc'}">${r.inv ? '✔' : '✘'}</td></tr>`).join('');
+  spark($('euSpark'), S.V, '#8e44ad');
+  $('euStep').disabled = S.done;
+}
+async function euPlay(){
+  if (euPlaying){ euPlaying = false; $('euPlay').textContent = 'Reproducir ⏵'; return; }
+  euPlaying = true; $('euPlay').textContent = 'Pausar ⏸';
+  while (euPlaying && !EU.done){ euStep(); await sleep(1650 - $('euSpeed').value); }
+  euPlaying = false; $('euPlay').textContent = 'Reproducir ⏵';
+}
+$('euReset').onclick = euReset; $('euStep').onclick = euStep; $('euPlay').onclick = euPlay;
+['euA', 'euB', 'euBug'].forEach(id => $(id).onchange = euReset);
+$('euRand').onclick = () => { const g = 5 * (1 + Math.floor(Math.random() * 12)); $('euA').value = g * (2 + Math.floor(Math.random() * 30)); $('euB').value = g * (1 + Math.floor(Math.random() * 20)); euReset(); };
+$('euFib').onclick = () => { $('euA').value = 233; $('euB').value = 144; euReset(); };
+
+/* =====================================================================
+   VALIDACIÓN MASIVA
+   ===================================================================== */
+function runBinary(A, x, bug){
+  let lo = 0, hi = A.length - 1, it = 0, invOk = true, varOk = true;
+  if (!bsInv(A, x, lo, hi).all) invOk = false;
+  while (lo <= hi){
+    it++; const V = hi - lo + 1, mid = (lo + hi) >> 1;
+    if (A[mid] === x) return { r: mid, it, invOk, varOk, term: true };
+    if (A[mid] < x) lo = bug ? mid : mid + 1; else hi = mid - 1;
+    if (!bsInv(A, x, lo, hi).all) invOk = false;
+    if (!(hi - lo + 1 < V)){ varOk = false; return { r: null, it, invOk, varOk, term: false }; }
+  }
+  return { r: -1, it, invOk, varOk, term: true };
+}
+function runEuclid(a, b, bug){
+  const g0 = gcdBrute(a, b); let it = 0, invOk = true, varOk = true;
+  while (b !== 0){
+    it++; const r = bug ? Math.floor(a / b) : a % b;
+    if (!(r < b)) varOk = false;
+    a = b; b = r;
+    if (gcdBrute(a, b) !== g0) invOk = false;
+    if (it > 1000) return { r: null, it, invOk, varOk: false, g0 };
+  }
+  return { r: a, it, invOk, varOk, g0 };
+}
+async function validate(){
+  const N = Math.max(100, Math.min(200000, +$('valN').value || 10000)), seed = +$('valSeed').value || 0, bug = $('valBug').checked;
+  const out = $('valOut'); out.innerHTML = '<div class="msg info">Ejecutando…</div>'; await sleep(30);
+  const R = rng(seed), t0 = performance.now();
+  // búsqueda binaria
+  const b = { n: 0, inv: 0, vari: 0, post: 0, bound: 0, maxIt: 0, ex: null };
+  for (let t = 0; t < N; t++){
+    const n = randInt(R, 0, 200), A = [];
+    let v = randInt(R, -50, 50);
+    for (let i = 0; i < n; i++){ v += randInt(R, 0, 3); A.push(v); } // ordenado, con posibles repetidos
+    const x = n && R() < .5 ? A[randInt(R, 0, n - 1)] : randInt(R, -60, v + 10);
+    const res = runBinary(A, x, bug); b.n++;
+    const postOk = res.term && (res.r === -1 ? !A.includes(x) : A[res.r] === x); // oráculo: búsqueda lineal
+    const bound = Math.floor(Math.log2(Math.max(n, 1))) + 1;
+    if (res.invOk) b.inv++; if (res.varOk) b.vari++; if (postOk) b.post++; if (res.it <= bound) b.bound++;
+    b.maxIt = Math.max(b.maxIt, res.it);
+    if (!b.ex && (!postOk || !res.varOk || !res.invOk)) b.ex = `n = ${n}, x = ${x}, A = [${A.slice(0, 12).join(', ')}${n > 12 ? ', …' : ''}]`;
+  }
+  // Euclides
+  const e = { n: 0, inv: 0, vari: 0, post: 0, bound: 0, maxIt: 0, ex: null };
+  for (let t = 0; t < N; t++){
+    let a = randInt(R, 0, 10000), c = randInt(R, 0, 10000); if (a === 0 && c === 0) c = 1;
+    const res = runEuclid(a, c, bug); e.n++;
+    const postOk = res.r === res.g0;
+    const mn = Math.min(a, c), bound = 5 * (mn > 0 ? String(mn).length : 1);
+    if (res.invOk) e.inv++; if (res.varOk) e.vari++; if (postOk) e.post++; if (res.it <= bound) e.bound++;
+    e.maxIt = Math.max(e.maxIt, res.it);
+    if (!e.ex && (!postOk || !res.invOk || !res.varOk)) e.ex = `(a, b) = (${a}, ${c}): retornó ${res.r}, mcd real = ${res.g0}`;
+  }
+  const ms = (performance.now() - t0).toFixed(0);
+  const cell = (k, n) => `<td class="${k === n ? 'okc' : 'badc'}">${k.toLocaleString('es')} / ${n.toLocaleString('es')} ${k === n ? '✔' : '✘'}</td>`;
+  const allOk = [b, e].every(s => s.inv === s.n && s.vari === s.n && s.post === s.n && s.bound === s.n);
+  out.innerHTML = `
+    <table><thead><tr><th>Algoritmo</th><th>Invariante en cada iteración</th><th>Variante decrece</th><th>Postcondición vs. oráculo</th><th>Cota de iteraciones</th><th>Máx. iteraciones</th></tr></thead>
+    <tbody>
+      <tr><td><b>Búsqueda binaria</b>${bug ? ' (con error)' : ''}</td>${cell(b.inv, b.n)}${cell(b.vari, b.n)}${cell(b.post, b.n)}${cell(b.bound, b.n)}<td>${b.maxIt} (n ≤ 200 → cota 8)</td></tr>
+      <tr><td><b>Euclides</b>${bug ? ' (con error)' : ''}</td>${cell(e.inv, e.n)}${cell(e.vari, e.n)}${cell(e.post, e.n)}${cell(e.bound, e.n)}<td>${e.maxIt} (Lamé)</td></tr>
+    </tbody></table>
+    <div class="msg ${allOk ? 'ok' : 'bad'}">${allOk
+      ? `✔ ${(2 * N).toLocaleString('es')} ejecuciones sin un solo contraejemplo (semilla ${seed}, ${ms} ms). Esto <b>no reemplaza</b> la demostración, pero la confirma experimentalmente.`
+      : `✘ Se encontraron contraejemplos. ${b.ex ? `<br>Búsqueda binaria: ${b.ex}` : ''}${e.ex ? `<br>Euclides: ${e.ex}` : ''}`}</div>`;
+}
+$('valRun').onclick = validate;
+
+/* ---------- teclado e inicio ---------- */
+document.addEventListener('keydown', ev => {
+  if (ev.target.tagName === 'INPUT') return;
+  if (ev.key === 'ArrowRight' || ev.key === ' '){ ev.preventDefault(); if (currentTab === 'bs') bsStep(); else if (currentTab === 'eu') euStep(); }
+});
+window.addEventListener('resize', () => { BS && spark($('bsSpark'), BS.V, '#2e86c1'); EU && spark($('euSpark'), EU.V, '#8e44ad'); });
+bsGenerate();
+euReset();
+</script>
+</body>
+</html>
