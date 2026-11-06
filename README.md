@@ -19,8 +19,7 @@ python verificacion.py
 
 ## Integrantes
 
-- [Integrante 1]
-- [Integrante 2]
-- [Integrante 3]
+- John Emmanuel Lopez Esquivel
+- Sergio Perez
 
 Se usó inteligencia artificial como apoyo para construir el simulador.
